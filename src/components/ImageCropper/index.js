@@ -1,5 +1,5 @@
 import Taro, { Component } from '@tarojs/taro'
-import { View, Text, Canvas, Button, CoverView } from '@tarojs/components'
+import { View, Text, Canvas, Button, Image } from '@tarojs/components'
 import PropTypes from 'prop-types'
 
 import './index.scss'
@@ -10,21 +10,15 @@ export default class ImageCropper extends Component {
   constructor (props) {
     super(props)
     this.state = {
-      curImageLeft: 0,
-      curImageTop: 0,
-      curImageWidth: 0,
-      curImageHeight: 0,
-      posX: 0,
-      posY: 0,
-      dist: 0,
-      scale: 1,
-      masked: true,
+      imgSrc: this.props.imageSource,
+      imageLeft: 0,
+      imageTop: 0,
+      imageWidth: 0,
+      imageHeight: 0,
       cutLeft: 0,
       cutTop: 0,
       cutWidth: 0,
       cutHeight: 0,
-      moveThrottle: null,
-      moveThrottleFlag: true,
     }
     this.canvasId = 'image-cropper'
     this.ctx = null
@@ -41,17 +35,69 @@ export default class ImageCropper extends Component {
     this.initialImageHeight = 0
     this.initialImageLeft = 0
     this.initialImageTop = 0
-  }
-
-  componentWillMount () {
-    console.log(Taro.getSystemInfoSync())
+    this.posX = 0
+    this.posY = 0
+    this.dist = 0
+    this.scale = 1
   }
 
   componentDidMount () {
     this.initializeCanvas()
     this.initializeImageInfo()
     this.initializeCuttingFrame()
-    console.log(this.state)
+  }
+
+  initializeImageInfo = () => {
+    Taro.getImageInfo({
+      src: this.props.imageSource,
+      success: (res) => {
+        // convert image source to native if it's from network
+        if (this.props.imageSource.search(/tmp/) == -1) {
+          this.setState({
+            imgSrc: res.path
+          })
+        } else {
+          this.setState({
+            imgSrc: this.props.imageSource
+          })
+        }
+        this.originalImageWidth = res.width
+        this.originalImageHeight = res.height
+        this.originalImageRatio = this.originalImageHeight / this.originalImageWidth
+        // initialize image size and position
+        if (this.originalImageRatio >= this.canvasRatio) {
+          this.initialImageHeight = this.canvasHeight
+          this.initialImageWidth = Math.floor(this.originalImageWidth * this.canvasHeight / this.originalImageHeight)
+          this.initialImageLeft = Math.floor((this.canvasWidth - this.initialImageWidth) / 2)
+          this.initialImageTop = 0
+        } else {
+          this.initialImageWidth = this.canvasWidth
+          this.initialImageHeight = Math.floor(this.originalImageHeight * this.canvasWidth / this.originalImageWidth)
+          this.initialImageTop = Math.floor((this.canvasHeight - this.initialImageHeight) / 2)
+          this.initialImageLeft = 0
+        }
+        this.setState({
+          imageWidth: this.initialImageWidth,
+          imageHeight: this.initialImageHeight,
+          imageLeft: this.initialImageLeft,
+          imageTop: this.initialImageTop
+        }, () => {
+          console.log(this.state)
+        })
+      },
+      fail: (err) => {
+        console.error(err)
+      }
+    })
+  }
+
+  initializeCuttingFrame = () => {
+    this.setState({
+      cutLeft: Math.floor(this.canvasWidth / 4),
+      cutTop: Math.floor((this.canvasHeight - Math.floor(this.canvasWidth / 2)) / 2),
+      cutWidth: Math.floor(this.canvasWidth / 2),
+      cutHeight: Math.floor(this.canvasWidth / 2),
+    })
   }
 
   initializeCanvas = () => {
@@ -73,275 +119,109 @@ export default class ImageCropper extends Component {
     this.canvasRatio = this.canvasHeight / this.canvasWidth
   }
 
-  initializeImageInfo = () => {
-    let that = this
-    Taro.getImageInfo({
-      src: that.props.imageSource,
-      success: (res) => {
-        // convert image source to native if it's from network
-        if (that.props.imageSource.search(/tmp/) == -1) {
-          that.imageSource = res.path
-        } else {
-          that.imageSource = that.props.imageSource
-        }
-        that.originalImageWidth = res.width
-        that.originalImageHeight = res.height
-        // initialize image size and position
-        this.originalImageRatio = that.originalImageHeight / that.originalImageWidth
-        if (this.originalImageRatio >= that.canvasRatio) {
-          that.initialImageHeight = that.canvasHeight
-          that.initialImageWidth = Math.floor(that.originalImageWidth * that.canvasHeight / that.originalImageHeight)
-          that.initialImageLeft = Math.floor((that.canvasWidth - that.initialImageWidth) / 2)
-          that.initialImageTop = 0
-        } else {
-          that.initialImageWidth = that.canvasWidth
-          that.initialImageHeight = Math.floor(that.originalImageHeight * that.canvasWidth / that.originalImageWidth)
-          that.initialImageTop = Math.floor((that.canvasHeight - that.initialImageHeight) / 2)
-          that.initialImageLeft = 0
-        }
-        that.setState({
-          curImageWidth: that.initialImageWidth,
-          curImageHeight: that.initialImageHeight,
-          curImageLeft: that.initialImageLeft,
-          curImageTop: that.initialImageTop
-        }, () => {
-          that.draw()
-        })
-      },
-      fail: (err) => {
-        console.error(err)
-      }
-    })
-  }
-
-  initializeCuttingFrame = () => {
-    this.setState({
-      cutLeft: Math.floor(this.canvasWidth / 4),
-      cutTop: Math.floor((this.canvasHeight - Math.floor(this.canvasWidth / 2)) / 2),
-      cutWidth: Math.floor(this.canvasWidth / 2),
-      cutHeight: Math.floor(this.canvasWidth / 2),
-    }, () => {
-      console.log('initialize')
-      console.log(this.state)
-    })
-  }
-
-  // draw image according to current canvas state
-  draw = () => {
-    let ctx = this.ctx
-    ctx.save()
-    ctx.drawImage(this.imageSource, this.state.curImageLeft, this.state.curImageTop, this.state.curImageWidth, this.state.curImageHeight)
-    ctx.restore()
-    ctx.draw()
-  }
-
-
-  touchImage = (e) => {
-    if (e.touches.length < 2) {
-      // single finger
-      // record position
-      this.setState({
-        posX: e.touches[0].x,
-        posY: e.touches[0].y
-      })
-    } else {
-      // two fingers or more, but ignore those with order more than 2
-      let distX = e.touches[0].x - e.touches[1].x
-      let distY = e.touches[0].y - e.touches[1].y
-      let dist = Math.sqrt(distX * distX + distY * distY)
-      console.log(`${this.touchImage.name}: dist: ${dist}`)
-      this.setState({
-        dist,
-      })
-    }
-  }
-
-  moveImage = (e) => {
-    if (e.touches.length < 2) {
-      // single finger
-      const distX = e.touches[0].x - this.state.posX
-      const distY = e.touches[0].y - this.state.posY
-      this.setState((prevState) => {
-        return {
-          posX: e.touches[0].x,
-          posY: e.touches[0].y,
-          curImageLeft: prevState.curImageLeft + distX,
-          curImageTop: prevState.curImageTop + distY
-        }
-      }, () => {
-        this.draw()
-      })
-    } else {
-      // two fingers or more, but ignore those with order more than 2
-      // console.log(e.touches)
-      const distX = e.touches[0].x - e.touches[1].x
-      const distY = e.touches[0].y - e.touches[1].y
-      const dist = Math.sqrt(distX * distX + distY * distY)
-      const distDiff = dist - this.state.dist 
-      const scale = this.state.scale + 0.005 * distDiff
-      console.log(`${this.moveImage.name}: dist: ${dist}`)
-      console.log(`${this.moveImage.name}: scale: ${scale}`)
-      // limit scale to rational range
-      if (scale <= this.props.minScale || scale >= this.props.maxScale) {
-        return
-      }
-      this.setState({
-        dist: dist,
-        scale: scale,
-        curImageWidth: Math.floor(scale * this.initialImageWidth),
-        curImageHeight: Math.floor(scale * this.initialImageHeight),
-        curImageLeft: Math.floor((this.canvasWidth - Math.floor(scale * this.initialImageWidth)) / 2),
-        curImageTop: Math.floor((this.canvasHeight - Math.floor(scale * this.initialImageHeight)) / 2),
-      }, () => {
-        this.draw()
-      })
-    }
-  }
-
-  dropImage = () => {
-    // restore to initial state if needed
-    this.resetImageInCanvasIfNeeded()
-  }
-
-
-  startMoveCuttingFrame = (e) => {
-    if (this.props.fixCuttingFrame) return
-    if (e.touches.length >= 2) return
-    console.log(e)
-  }
-
   moveCuttingFrame = (e) => {
-    console.log(e)
     if (this.props.fixCuttingFrame) return
     if (e.touches.length >= 2) return
-    console.log(e)
-    // set throttle (on android platform)
-    if (!this.state.moveThrottleFlag) return
-    this._setMoveThrottle()
     const newCutTouchX = e.touches[0].clientX
     const newCutTouchY = e.touches[0].clientY
     const targetId = e.target.id
     this._calcAndUpdateCuttingFrame(newCutTouchX, newCutTouchY, targetId)
   }
 
-  stopMoveCuttingFrame = (e) => {
-    console.log(e)
+  startMoveImage = (e) => {
+    if (e.touches.length < 2) {
+      this.posX = e.touches[0].clientX
+      this.posY = e.touches[0].clientY
+    } else {
+      const distX = e.touches[0].clientX - e.touches[1].clientX
+      const distY = e.touches[0].clientY - e.touches[1].clientY
+      this.dist = Math.sqrt(distX * distX + distY * distY)
+    }
   }
 
-  moveCuttingFrame2 = (e) => {
-    // console.log(e)
-    if (e.touches.length >= 2) {
-      return
-    }
-    if (!this.state.moveThrottleFlag) {
-      return
-    }
-    this._setMoveThrottle()
-    // calculate dist
-    let cutPosX = e.touches[0].clientX
-    let cutPosY = e.touches[0].clientY
-    const targetId = e.target.id
-    if (targetId === 'border-top') {
-      cutPosY = Math.max(cutPosY, 0)
-      cutPosY = Math.min(cutPosY, this.state.cutTop + this.state.cutHeight - this.props.cuttingFrameMinSize)
-      const newCutHeight = this.state.cutHeight + this.state.cutTop - cutPosY
-      this.setState({
-        cutTop: cutPosY,
-        cutHeight: newCutHeight
+  moveImage = (e) => {
+    if (e.touches.length < 2) {
+      const distX = e.touches[0].clientX - this.posX
+      const distY = e.touches[0].clientY - this.posY
+      this.posX = e.touches[0].clientX
+      this.posY = e.touches[0].clientY
+      this.setState((prevState) => {
+        return {
+          imageLeft: prevState.imageLeft + distX,
+          imageTop: prevState.imageTop + distY
+        }
       })
-    } else if (targetId === 'border-left') {
-      cutPosX = Math.max(cutPosX, 0)
-      cutPosX = Math.min(cutPosX, this.state.cutLeft + this.state.cutWidth - this.props.cuttingFrameMinSize)
-      const newCutWidth = this.state.cutWidth + this.state.cutLeft - cutPosX
+    } else {
+      const distX = e.touches[0].clientX - e.touches[1].clientX
+      const distY = e.touches[0].clientY - e.touches[1].clientY
+      const dist = Math.sqrt(distX * distX + distY * distY)
+      const distDiff = dist - this.dist
+      const scale = this.scale + 0.005 * distDiff
+      if (scale <= this.props.minScale || scale >= this.props.maxScale) {
+        return
+      }
+      this.dist = dist
+      this.scale = scale
       this.setState({
-        cutLeft: cutPosX,
-        cutWidth: newCutWidth
-      })
-    } else if (targetId === 'border-right') {
-      let newCutWidth = cutPosX - this.state.cutLeft
-      newCutWidth = Math.max(newCutWidth, this.props.cuttingFrameMinSize)
-      newCutWidth = Math.min(newCutWidth, this.canvasWidth - this.state.cutLeft)
-      this.setState({
-        cutWidth: newCutWidth
-      })
-    } else if (targetId === 'border-bottom') {
-      let newCutHeight = cutPosY - this.state.cutTop
-      newCutHeight = Math.max(newCutHeight, this.props.cuttingFrameMinSize)
-      newCutHeight = Math.min(newCutHeight, this.canvasHeight - this.state.cutTop)
-      this.setState({
-        cutHeight: newCutHeight
+        imageWidth: Math.floor(scale * this.initialImageWidth),
+        imageHeight: Math.floor(scale * this.initialImageHeight),
+        imageLeft: Math.floor((this.canvasWidth - Math.floor(scale * this.initialImageWidth)) / 2),
+        imageTop: Math.floor((this.canvasHeight - Math.floor(scale * this.initialImageHeight)) / 2),
       })
     }
-    console.log(cutPosX, cutPosY)
   }
 
-  resetImageInCanvasIfNeeded = () => {
+  stopMoveImage = () => {
+    // reset position or size of the image if needed
+    console.log('stop!')
+    this._resetImageInCanvasIfNeeded()
+  }
+
+  // draw image according to current canvas state
+  draw = () => {
+    let ctx = this.ctx
+    ctx.save()
+    ctx.drawImage(this.imageSource, this.state.imageLeft, this.state.imageTop, this.state.imageWidth, this.state.imageHeight)
+    ctx.restore()
+    ctx.draw()
+  }
+
+  _resetImageInCanvasIfNeeded = () => {
     this.setState((prevState) => {
       // rescale if scale less than 1
-      if (prevState.scale < 1) {
+      if (this.scale < 1) {
+        this.scale = 1
         return {
-          curImageWidth: this.initialImageWidth,
-          curImageHeight: this.initialImageHeight,
-          curImageLeft: this.initialImageLeft,
-          curImageTop: this.initialImageTop,
-          scale: 1
+          imageWidth: this.initialImageWidth,
+          imageHeight: this.initialImageHeight,
+          imageLeft: this.initialImageLeft,
+          imageTop: this.initialImageTop,
         }
       } else {
         let newState = {
-          curImageWidth: Math.floor(this.initialImageWidth * prevState.scale),
-          curImageHeight: Math.floor(this.initialImageHeight * prevState.scale),
-          scale: prevState.scale
+          imageLeft: prevState.imageLeft,
+          imageTop: prevState.imageTop
         }
-        newState.curImageLeft = prevState.curImageLeft
-        newState.curImageTop = prevState.curImageTop
-        
-        if (prevState.curImageWidth < this.canvasWidth) {
-          newState.curImageLeft = Math.floor((this.canvasWidth - prevState.curImageWidth) / 2)
+        if (prevState.imageWidth < this.canvasWidth) {
+          newState.imageLeft = Math.floor((this.canvasWidth - prevState.imageWidth) / 2)
         } else {
-          if (prevState.curImageLeft > 0) {
-            newState.curImageLeft = 0
-          } else if (prevState.curImageLeft + prevState.curImageWidth < this.canvasWidth) {
-            newState.curImageLeft = this.canvasWidth - prevState.curImageWidth
+          if (prevState.imageLeft > 0) {
+            newState.imageLeft = 0
+          } else if (prevState.imageLeft + prevState.imageWidth < this.canvasWidth) {
+            newState.imageLeft = this.canvasWidth - prevState.imageWidth
           }
         }
 
-        if (prevState.curImageHeight < this.canvasHeight) {
-          newState.curImageTop = Math.floor((this.canvasHeight - prevState.curImageHeight) / 2)
+        if (prevState.imageHeight < this.canvasHeight) {
+          newState.imageTop = Math.floor((this.canvasHeight - prevState.imageHeight) / 2)
         } else {
-          if (prevState.curImageTop > 0) {
-            newState.curImageTop = 0
-          } else if (prevState.curImageTop + prevState.curImageHeight < this.canvasHeight) {
-            newState.curImageTop = this.canvasHeight - prevState.curImageHeight
+          if (prevState.imageTop > 0) {
+            newState.imageTop = 0
+          } else if (prevState.imageTop + prevState.imageHeight < this.canvasHeight) {
+            newState.imageTop = this.canvasHeight - prevState.imageHeight
           }
         }
         return newState
-      }
-    }, () => {
-      this.draw()
-    })
-  }
-
-  removeMask = () => {
-    this.setState({
-      masked: false
-    })
-  }
-
-  _setMoveThrottle = () => {
-    // should throttle on android platform
-    let that = this
-    this.setState({
-      moveThrottleFlag: false
-    }, () => {
-      if (that.systemInfo.platform === 'android') {
-        clearTimeout(that.state.moveThrottle)
-        this.setState({
-          moveThrottle: setTimeout(() => {that.setState({moveThrottleFlag: true})}, 15)
-        })
-      } else {
-        that.setState({
-          moveThrottleFlag: true
-        })
       }
     })
   }
@@ -359,7 +239,6 @@ export default class ImageCropper extends Component {
         distX = newCutTouchX - this.state.cutLeft
         distY = newCutTouchY - this.state.cutTop
         if (this.props.fixCuttingFrameRatio) {
-          // limit distX
           distX = Math.max(-this.state.cutTop, distX)
           distY = distX
         }
@@ -427,8 +306,9 @@ export default class ImageCropper extends Component {
             cutHeight: prevState.cutHeight + distY
           }
         })
+        break
       default:
-        break;
+        break
     }
 
   }
@@ -441,15 +321,23 @@ export default class ImageCropper extends Component {
           <View className='content-mid' style={'height: ' + this.state.cutHeight + 'px;'}>
             <View className='mask mask-left' style={'width: ' + this.state.cutLeft + 'px;'} />
             <View className='cutting-frame' style={'width: ' + this.state.cutWidth + 'px; height: ' + this.state.cutHeight + 'px;'}>
-              <View className='corner corner-top-left' id='corner-top-left' onTouchStart={this.startMoveCuttingFrame} onTouchMove={this.moveCuttingFrame} onTouchEnd={this.stopMoveCuttingFrame} />
-              <View className='corner corner-top-right' id='corner-top-right' onTouchStart={this.startMoveCuttingFrame} onTouchMove={this.moveCuttingFrame} onTouchEnd={this.stopMoveCuttingFrame} />
-              <View className='corner corner-bottom-left' id='corner-bottom-left' onTouchStart={this.startMoveCuttingFrame} onTouchMove={this.moveCuttingFrame} onTouchEnd={this.stopMoveCuttingFrame} />
-              <View className='corner corner-bottom-right' id='corner-bottom-right' onTouchStart={this.startMoveCuttingFrame} onTouchMove={this.moveCuttingFrame} onTouchEnd={this.stopMoveCuttingFrame} />
+              <View className='corner corner-top-left' id='corner-top-left' onTouchMove={this.moveCuttingFrame} />
+              <View className='corner corner-top-right' id='corner-top-right' onTouchMove={this.moveCuttingFrame} />
+              <View className='corner corner-bottom-left' id='corner-bottom-left' onTouchMove={this.moveCuttingFrame} />
+              <View className='corner corner-bottom-right' id='corner-bottom-right' onTouchMove={this.moveCuttingFrame} />
             </View>
             <View className='mask mask-right' />
           </View>
           <View className='mask mask-bottom' />
         </View>
+        <Image 
+          className='img' 
+          src={this.state.imgSrc}
+          style={'left: ' + this.state.imageLeft + 'px; top: ' + this.state.imageTop + 'px; width: ' + this.imageWidth + 'px; height: ' + this.state.imageHeight + 'px;'}
+          onTouchStart={this.startMoveImage}
+          onTouchMove={this.moveImage}
+          onTouchEnd={this.stopMoveImage}
+        />
         
         {/* <Canvas 
           canvasId={this.canvasId}
@@ -475,7 +363,7 @@ ImageCropper.defaultProps = {
   fixCuttingFrame: false,
   fixCuttingFrameRatio: true,
   minScale: 0.5,
-  maxScale: 3,
+  maxScale: 2,
   background: 'rgba(0, 0, 0, 0.8)',
   cuttingFrameColor: 'white',
   cuttingFrameBorderSize: 30,
