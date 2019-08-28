@@ -3,7 +3,7 @@ import { View, Text, Canvas, Button, Image } from '@tarojs/components'
 import PropTypes from 'prop-types'
 
 import './index.scss'
-
+import throttle from '../../utils'
 
 export default class ImageCropper extends Component {
 
@@ -25,6 +25,8 @@ export default class ImageCropper extends Component {
     this.systemInfo = Taro.getSystemInfoSync()
     this.windowWidth = this.systemInfo.windowWidth
     this.windowHeight = this.systemInfo.windowHeight
+    // this.isAndroid = this.systemInfo.platform === 'android'
+    this.isAndroid = true
     this.canvasWidth = 0
     this.canvasHeight = 0
     this.canvasRatio = 0
@@ -45,6 +47,10 @@ export default class ImageCropper extends Component {
     this.initializeCanvas()
     this.initializeImageInfo()
     this.initializeCuttingFrame()
+    if (this.isAndroid) {
+      this.moveCuttingFrame = throttle(this.moveCuttingFrame)
+      this.moveImage = throttle(this.moveImage)
+    }
   }
 
   initializeImageInfo = () => {
@@ -125,6 +131,7 @@ export default class ImageCropper extends Component {
     const newCutTouchX = e.touches[0].clientX
     const newCutTouchY = e.touches[0].clientY
     const targetId = e.target.id
+    console.log(newCutTouchX, newCutTouchY)
     this._calcAndUpdateCuttingFrame(newCutTouchX, newCutTouchY, targetId)
   }
 
@@ -140,6 +147,7 @@ export default class ImageCropper extends Component {
   }
 
   moveImage = (e) => {
+    console.log(e)
     if (e.touches.length < 2) {
       const distX = e.touches[0].clientX - this.posX
       const distY = e.touches[0].clientY - this.posY
