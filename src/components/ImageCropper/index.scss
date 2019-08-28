@@ -1,10 +1,91 @@
+$corner-size: 50px;
+$corner-border-size: 6px;
+$corner-border-style: $corner-border-size solid white;
+
 .index {
-	background-color: aquamarine;
-	width: 100vw;
-	height: 100vh;
+  position: fixed;
+  top:0;
+  left:0;
+  width:100vw;
+  height:100vh;
+  z-index: 1;
+  background:rgba(14, 13, 13,.8);
 }
 
 .image-cropper-canvas {
 	width: 100%;
-	height: 100%;
+  height: 100%;
+  z-index: 1,
+}
+
+.content {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  pointer-events: none;
+}
+
+.content .mask-top {
+  pointer-events: none;
+}
+
+.content .content-mid {
+  display: flex;
+  width: 100%;
+}
+
+.content .content-mid .cutting-frame {
+  box-sizing: border-box;
+  position: relative;
+  border: 1px solid white;
+}
+
+.content .content-mid .mask-right {
+  flex: auto;
+}
+
+.content .mask-bottom {
+  flex: auto;
+}
+
+.corner {
+  pointer-events: auto;
+  position: absolute;
+  width: $corner-size;
+  height: $corner-size;
+  z-index: 10;
+}
+
+.corner-top-left {
+  left: -$corner-border-size;
+  top: -$corner-border-size;
+  border-top: $corner-border-style;
+  border-left: $corner-border-style;
+}
+
+.corner-top-right {
+  right: -$corner-border-size;
+  top: -$corner-border-size;
+  border-top: $corner-border-style;
+  border-right: $corner-border-style;
+}
+
+.corner-bottom-left {
+  left: -$corner-border-size;
+  bottom: -$corner-border-size;
+  border-left: $corner-border-style;
+  border-bottom: $corner-border-style;
+}
+
+.corner-bottom-right {
+  right: -$corner-border-size;
+  bottom: -$corner-border-size;
+  border-right: $corner-border-style;
+  border-bottom: $corner-border-style;
+}
+
+.mask-light {
+  background-color: rgba($color: #000000, $alpha: 0.45)
 }
