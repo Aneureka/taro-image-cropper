@@ -1,4 +1,4 @@
-export default function throttle(fn, threshold=20) {
+export default function throttle(fn, threshold=1000/40) {
     let _lastExecTime = null
     let context = this
     return function (...args) {
