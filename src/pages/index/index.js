@@ -23,8 +23,8 @@ export default class Index extends Component {
   render () {
     return (
       <View className='index'>
-        <ImageCropper imageSource='https://tokindle.top/s2a/results/acaa73f3-9513-4b0c-923d-074580dda687.jpg' enableCuttingFrameMoveOut enableCuttingFrameRatioChange />
-        {/* <ImageCropper imageSource='https://tokindle.top/s2a/results/test.jpg' enableCuttingFrameMoveOut enableCuttingFrameRatioChange /> */}
+        {/* <ImageCropper imageSource='https://tokindle.top/s2a/results/acaa73f3-9513-4b0c-923d-074580dda687.jpg' enableCuttingFrameMoveOut enableCuttingFrameRatioChange /> */}
+        <ImageCropper imageSource='https://tokindle.top/s2a/results/test.jpg' enableCuttingFrameMoveOut enableCuttingFrameRatioChange />
       </View>
     )
   }

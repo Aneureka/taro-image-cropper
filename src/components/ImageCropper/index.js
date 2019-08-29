@@ -41,8 +41,8 @@ export default class ImageCropper extends Component {
 
   componentDidMount () {
     this.initializeCanvas()
-    this.initializeImageInfo()
     this.initializeCuttingFrame()
+    this.initializeImageInfo()
     if (this.applyThrottle) {
       this.moveCuttingFrame = throttle(this.moveCuttingFrame)
       this.moveImage = throttle(this.moveImage)
@@ -65,18 +65,17 @@ export default class ImageCropper extends Component {
         }
         this.originalImageWidth = res.width
         this.originalImageHeight = res.height
-        this.originalImageRatio = this.originalImageHeight / this.originalImageWidth
-        // initialize image size and position
-        if (this.originalImageRatio >= this.canvasRatio) {
-          this.initialImageHeight = this.canvasHeight
-          this.initialImageWidth = Math.floor(this.originalImageWidth * this.canvasHeight / this.originalImageHeight)
-          this.initialImageLeft = Math.floor((this.canvasWidth - this.initialImageWidth) / 2)
-          this.initialImageTop = 0
+        this.originalImageRatio = res.height / res.width
+        if (this.originalImageRatio >= 1) {
+          this.initialImageWidth = this.initialCuttingFrameWidth
+          this.initialImageHeight = Math.floor(this.initialCuttingFrameWidth * this.originalImageRatio)
+          this.initialImageLeft = this.initialCuttingFrameLeft
+          this.initialImageTop = Math.floor(this.initialCuttingFrameTop + this.initialCuttingFrameHeight / 2 - this.initialImageHeight / 2)
         } else {
-          this.initialImageWidth = this.canvasWidth
-          this.initialImageHeight = Math.floor(this.originalImageHeight * this.canvasWidth / this.originalImageWidth)
-          this.initialImageTop = Math.floor((this.canvasHeight - this.initialImageHeight) / 2)
-          this.initialImageLeft = 0
+          this.initialImageWidth = Math.floor(this.initialCuttingFrameHeight / this.originalImageRatio)
+          this.initialImageHeight = this.initialCuttingFrameHeight
+          this.initialImageTop = this.initialCuttingFrameTop
+          this.initialImageLeft = Math.floor(this.initialCuttingFrameLeft + this.initialCuttingFrameWidth / 2 - this.initialImageWidth / 2)
         }
         this.setState({
           imageWidth: this.initialImageWidth,
@@ -92,11 +91,15 @@ export default class ImageCropper extends Component {
   }
 
   initializeCuttingFrame = () => {
+    this.initialCuttingFrameWidth = Math.floor(this.canvasWidth * 2 / 3)
+    this.initialCuttingFrameHeight = this.initialCuttingFrameWidth
+    this.initialCuttingFrameLeft = Math.floor((this.canvasWidth - this.initialCuttingFrameWidth) / 2)
+    this.initialCuttingFrameTop = Math.floor((this.canvasHeight - this.initialCuttingFrameHeight) / 2)
     this.setState({
-      cutLeft: Math.floor(this.canvasWidth / 4),
-      cutTop: Math.floor((this.canvasHeight - Math.floor(this.canvasWidth / 2)) / 2),
-      cutWidth: Math.floor(this.canvasWidth / 2),
-      cutHeight: Math.floor(this.canvasWidth / 2),
+      cutLeft: this.initialCuttingFrameLeft,
+      cutTop: this.initialCuttingFrameTop,
+      cutWidth: this.initialCuttingFrameWidth,
+      cutHeight: this.initialCuttingFrameHeight
     })
   }
 
@@ -186,8 +189,7 @@ export default class ImageCropper extends Component {
   }
 
   stopMoveImage = () => {
-    // reset position or size of the image if needed
-    this._resetImageInCanvasIfNeeded()
+    this._rectifyImage()
   }
 
   // draw image according to current canvas state
@@ -199,55 +201,58 @@ export default class ImageCropper extends Component {
     ctx.draw()
   }
 
-  _resetImageInCanvasIfNeeded = () => {
-    this.setState((prevState) => {
-      // rescale if scale less than 1
-      if (this.scale < 1) {
-        this.scale = 1
-        return {
-          imageWidth: this.initialImageWidth,
-          imageHeight: this.initialImageHeight,
-          imageLeft: this.initialImageLeft,
-          imageTop: this.initialImageTop,
-        }
-      } else {
-        let newState = {
-          imageLeft: prevState.imageLeft,
-          imageTop: prevState.imageTop
-        }
-        if (prevState.imageWidth < this.canvasWidth) {
-          newState.imageLeft = Math.floor((this.canvasWidth - prevState.imageWidth) / 2)
-        } else {
-          if (prevState.imageLeft > 0) {
-            newState.imageLeft = 0
-          } else if (prevState.imageLeft + prevState.imageWidth < this.canvasWidth) {
-            newState.imageLeft = this.canvasWidth - prevState.imageWidth
-          }
-        }
-
-        if (prevState.imageHeight < this.canvasHeight) {
-          newState.imageTop = Math.floor((this.canvasHeight - prevState.imageHeight) / 2)
-        } else {
-          if (prevState.imageTop > 0) {
-            newState.imageTop = 0
-          } else if (prevState.imageTop + prevState.imageHeight < this.canvasHeight) {
-            newState.imageTop = this.canvasHeight - prevState.imageHeight
-          }
-        }
-        return newState
-      }
+  _rectifyImage = () => {
+    let newImageLeft = this.state.imageLeft
+    let newImageTop = this.state.imageTop
+    let newImageWidth = this.state.imageWidth
+    let newImageHeight = this.state.imageHeight
+    const curCutLeft = this.state.cutLeft
+    const curCutTop = this.state.cutTop
+    const curCutWidth = this.state.cutWidth
+    const curCutHeight = this.state.cutHeight
+    // update image size
+    let newTempScale = Math.max(curCutWidth / newImageWidth, curCutHeight / newImageHeight, 1)
+    newImageWidth = Math.floor(newImageWidth * newTempScale)
+    newImageHeight = Math.floor(newImageHeight * newTempScale)
+    this.scale = newImageWidth / this.initialImageWidth
+    // update image position
+    // left
+    if (newImageLeft > curCutLeft) {
+      newImageLeft = curCutLeft
+    }
+    // top
+    if (newImageTop > curCutTop) {
+      newImageTop = curCutTop
+    }
+    // right
+    if (newImageLeft + newImageWidth < curCutLeft + curCutWidth) {
+      newImageLeft = curCutLeft + curCutWidth - newImageWidth
+    }
+    // 
+    if (newImageTop + newImageHeight < curCutTop + curCutHeight) {
+      newImageTop = curCutTop + curCutHeight - newImageHeight
+    }
+    this.setState({
+      imageLeft: newImageLeft,
+      imageTop: newImageTop,
+      imageWidth: newImageWidth,
+      imageHeight: newImageHeight
     })
   }
 
   _calcAndUpdateCuttingFrame = (newCutTouchX, newCutTouchY, cornerId) => {
     let distX = 0
     let distY = 0
+    let newCutLeft = this.startCutLeft
+    let newCutTop = this.startCutTop
+    let newCutWidth = this.startCutWidth
+    let newCutHeight = this.startCutHeight
     switch (cornerId) {
       case 'corner-top-left':
         // limit the touched position not to overflow
-        newCutTouchX = Math.max(0, newCutTouchX)
+        newCutTouchX = Math.max(this.startCutX - this.startCutLeft, newCutTouchX)
         newCutTouchX = Math.min(this.startCutLeft + this.startCutWidth - this.props.cuttingFrameMinSize, newCutTouchX)
-        newCutTouchY = Math.max(0, newCutTouchY)
+        newCutTouchY = Math.max(this.startCutY - this.startCutTop, newCutTouchY)
         newCutTouchY = Math.min(this.startCutTop + this.startCutHeight - this.props.cuttingFrameMinSize, newCutTouchY)
         distX = newCutTouchX - this.startCutX
         distY = newCutTouchY - this.startCutY
@@ -255,17 +260,21 @@ export default class ImageCropper extends Component {
           distX = Math.max(-this.startCutTop, distX)
           distY = distX
         }
+        newCutLeft += distX
+        newCutTop += distY
+        newCutWidth -= distX
+        newCutHeight -= distY
         this.setState({
-          cutLeft: this.startCutLeft + distX,
-          cutTop: this.startCutTop + distY,
-          cutWidth: this.startCutWidth - distX,
-          cutHeight: this.startCutHeight - distY
+          cutLeft: newCutLeft,
+          cutTop: newCutTop,
+          cutWidth: newCutWidth,
+          cutHeight: newCutHeight
         })
         break
       case 'corner-top-right':
         newCutTouchX = Math.max(this.startCutLeft + this.props.cuttingFrameMinSize, newCutTouchX)
-        newCutTouchX = Math.min(this.canvasWidth, newCutTouchX)
-        newCutTouchY = Math.max(0, newCutTouchY)
+        newCutTouchX = Math.min(this.canvasWidth + this.startCutX - this.startCutLeft - this.startCutWidth, newCutTouchX)
+        newCutTouchY = Math.max(this.startCutY - this.startCutTop, newCutTouchY)
         newCutTouchY = Math.min(this.startCutTop + this.startCutHeight - this.props.cuttingFrameMinSize, newCutTouchY)
         distX = newCutTouchX - this.startCutX
         distY = newCutTouchY - this.startCutY
@@ -273,49 +282,113 @@ export default class ImageCropper extends Component {
           distX = Math.min(this.startCutTop, distX)
           distY = -distX
         }
+        newCutTop += distY
+        newCutWidth += distX
+        newCutHeight -= distY
         this.setState({
-          cutTop: this.startCutTop + distY,
-          cutWidth: this.startCutWidth + distX,
-          cutHeight: this.startCutHeight - distY
+          cutTop: newCutTop,
+          cutWidth: newCutWidth,
+          cutHeight: newCutHeight,
         })
         break
       case 'corner-bottom-left':
-        newCutTouchX = Math.max(0, newCutTouchX)
+        newCutTouchX = Math.max(this.startCutX - this.startCutLeft, newCutTouchX)
         newCutTouchX = Math.min(this.startCutLeft + this.startCutWidth - this.props.cuttingFrameMinSize, newCutTouchX)
         newCutTouchY = Math.max(this.startCutTop + this.props.cuttingFrameMinSize, newCutTouchY)
-        newCutTouchY = Math.min(this.canvasHeight, newCutTouchY)
+        newCutTouchY = Math.min(this.canvasHeight + this.startCutY - this.startCutTop - this.startCutHeight, newCutTouchY)
         distX = newCutTouchX - this.startCutX
         distY = newCutTouchY - this.startCutY
         if (this.props.fixCuttingFrameRatio) {
           distX = Math.max(-this.canvasHeight + this.startCutTop + this.startCutHeight, distX)
           distY = -distX
         }
+        newCutLeft += distX
+        newCutWidth -= distX
+        newCutHeight += distY
         this.setState({
-          cutLeft: this.startCutLeft + distX,
-          cutWidth: this.startCutWidth - distX,
-          cutHeight: this.startCutHeight + distY
+          cutLeft: newCutLeft,
+          cutWidth: newCutWidth,
+          cutHeight: newCutHeight,
         })
         break
       case 'corner-bottom-right':
         newCutTouchX = Math.max(this.startCutLeft + this.props.cuttingFrameMinSize, newCutTouchX)
-        newCutTouchX = Math.min(this.canvasWidth, newCutTouchX)
+        newCutTouchX = Math.min(this.canvasWidth + this.startCutX - this.startCutLeft - this.startCutWidth, newCutTouchX)
         newCutTouchY = Math.max(this.startCutTop + this.props.cuttingFrameMinSize, newCutTouchY)
-        newCutTouchY = Math.min(this.canvasHeight, newCutTouchY)
+        newCutTouchY = Math.min(this.canvasHeight + this.startCutY - this.startCutTop - this.startCutHeight, newCutTouchY)
         distX = newCutTouchX - this.startCutX
         distY = newCutTouchY - this.startCutY
         if (this.props.fixCuttingFrameRatio) {
           distX = Math.min(this.canvasHeight - this.startCutTop - this.startCutHeight, distX)
           distY = distX
         }
+        newCutWidth += distX
+        newCutHeight += distY
         this.setState({
-          cutWidth: this.startCutWidth + distX,
-          cutHeight: this.startCutHeight + distY
+          cutWidth: newCutWidth,
+          cutHeight: newCutHeight
         })
         break
       default:
         break
     }
+    this._adjustImageWhileMovingCuttingFrame(newCutLeft, newCutTop, newCutWidth, newCutHeight, cornerId)
+  }
 
+  _adjustImageWhileMovingCuttingFrame = (newCutLeft, newCutTop, newCutWidth, newCutHeight, cornerId) => {
+    console.log(cornerId)
+    let newImageLeft = this.state.imageLeft
+    let newImageTop = this.state.imageTop
+    let newImageWidth = this.state.imageWidth
+    let newImageHeight = this.state.imageHeight
+    // update image size
+    let newTempScale = Math.max(newCutWidth / newImageWidth, newCutHeight / newImageHeight, 1)
+    newImageWidth = Math.floor(newImageWidth * newTempScale)
+    newImageHeight = Math.floor(newImageHeight * newTempScale)
+    this.scale = newImageWidth / this.initialImageWidth
+    // update image position
+    switch(cornerId) {
+      case 'corner-top-left':
+        if (newImageLeft > newCutLeft) {
+          newImageLeft = newCutLeft
+        }
+        if (newImageTop > newCutTop) {
+          newImageTop = newCutTop
+        }
+        break
+      case 'corner-top-right':
+        if (newImageLeft < newCutLeft + newCutWidth - newImageWidth) {
+          newImageLeft = newCutLeft + newCutWidth - newImageWidth
+        }
+        if (newImageTop > newCutTop) {
+          newImageTop = newCutTop
+        }
+        break
+      case 'corner-bottom-left':
+        if (newImageLeft > newCutLeft) {
+          newImageLeft = newCutLeft
+        }
+        if (newImageTop < newCutTop + newCutHeight - newImageHeight) {
+          newImageTop = newCutTop + newCutHeight - newImageHeight
+        }
+        break
+      case 'corner-bottom-right':
+        if (newImageLeft < newCutLeft + newCutWidth - newImageWidth) {
+          newImageLeft = newCutLeft + newCutWidth - newImageWidth
+        }
+        if (newImageTop < newCutTop + newCutHeight - newImageHeight) {
+          newImageTop = newCutTop + newCutHeight - newImageHeight
+        }
+        break
+      default:
+        break
+    }
+    this.setState({
+      imageLeft: newImageLeft,
+      imageTop: newImageTop,
+      imageWidth: newImageWidth,
+      imageHeight: newImageHeight
+    })
   }
 
   render () {
