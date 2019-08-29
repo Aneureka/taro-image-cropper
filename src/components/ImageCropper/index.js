@@ -19,22 +19,16 @@ export default class ImageCropper extends Component {
       cutTop: 0,
       cutWidth: 0,
       cutHeight: 0,
+      movingCuttingFrame: false,
     }
     this.systemInfo = Taro.getSystemInfoSync()
     this.windowWidth = this.systemInfo.windowWidth
     this.windowHeight = this.systemInfo.windowHeight
     this.applyThrottle = this.props.applyThrottleOnAndroid && this.systemInfo.platform === 'android'
-    this.cropperWidth = 0
-    this.cropperHeight = 0
-    this.cropperRatio = 0
-    this.originalImageWidth = 0
-    this.originalImageHeight = 0
-    this.originalImageRatio = 0
-    this.initialImageWidth = 0
-    this.initialImageHeight = 0
-    this.initialImageLeft = 0
-    this.initialImageTop = 0
-    this.scale = 1
+    if (this.applyThrottle) {
+      this.moveCuttingFrame = throttle(this.moveCuttingFrame)
+      this.moveImage = throttle(this.moveImage)
+    }
   }
 
   componentDidMount () {
@@ -42,11 +36,9 @@ export default class ImageCropper extends Component {
     this.initializeCuttingFrame()
     this.initializeImageInfo()
     this.initializeCanvas()
-    if (this.applyThrottle) {
-      this.moveCuttingFrame = throttle(this.moveCuttingFrame)
-      this.moveImage = throttle(this.moveImage)
-    }
-    console.log(this.props)
+    setTimeout(() => {
+      this.cropImageOnCanvas(true)
+    }, 500)
   }
 
   initializeCropperSize = () => {
@@ -72,6 +64,7 @@ export default class ImageCropper extends Component {
         this.originalImageWidth = res.width
         this.originalImageHeight = res.height
         this.originalImageRatio = res.height / res.width
+        this.scale = 1
         if (this.originalImageRatio >= 1) {
           this.initialImageWidth = this.initialCuttingFrameWidth
           this.initialImageHeight = Math.floor(this.initialCuttingFrameWidth * this.originalImageRatio)
@@ -112,7 +105,6 @@ export default class ImageCropper extends Component {
   initializeCanvas = () => {
     this.canvasId = 'image-cropper'
     this.ctx = Taro.createCanvasContext(this.canvasId, this.$scope)
-    this.cropImageOnCanvas(true)
   }
 
   startMoveCuttingFrame = (e) => {
@@ -127,6 +119,9 @@ export default class ImageCropper extends Component {
     this.startCutTop = this.state.cutTop
     this.startCutWidth = this.state.cutWidth
     this.startCutHeight = this.state.cutHeight
+    this.setState({
+      movingCuttingFrame: true
+    })
   }
 
   moveCuttingFrame = (e) => {
@@ -139,7 +134,9 @@ export default class ImageCropper extends Component {
   }
 
   stopMoveCuttingFrame = () => {
-    // this.cropImageOnCanvas(true)
+    this.setState({
+      movingCuttingFrame: false
+    })
   }
 
   startMoveImage = (e) => {
@@ -418,18 +415,18 @@ export default class ImageCropper extends Component {
     return (
       <View className='index' style={'background: ' + this.props.background + ';'}>
         <View className='content'>
-          <View className='mask mask-top' style={'height: ' + this.state.cutTop + 'px;'} />
+          <View className={'mask mask-top' + (this.state.movingCuttingFrame ? ' dark' : '')} style={'height: ' + this.state.cutTop + 'px;'} />
           <View className='content-mid' style={'height: ' + this.state.cutHeight + 'px;'}>
-            <View className='mask mask-left' style={'width: ' + this.state.cutLeft + 'px;'} />
+            <View className={'mask mask-left' + (this.state.movingCuttingFrame ? ' dark' : '')} style={'width: ' + this.state.cutLeft + 'px;'} />
             <View className='cutting-frame' style={'width: ' + this.state.cutWidth + 'px; height: ' + this.state.cutHeight + 'px;'}>
               <View className='corner corner-top-left' id='corner-top-left' onTouchStart={this.startMoveCuttingFrame} onTouchMove={this.moveCuttingFrame} onTouchEnd={this.stopMoveCuttingFrame} />
               <View className='corner corner-top-right' id='corner-top-right' onTouchStart={this.startMoveCuttingFrame} onTouchMove={this.moveCuttingFrame} onTouchEnd={this.stopMoveCuttingFrame} />
               <View className='corner corner-bottom-left' id='corner-bottom-left' onTouchStart={this.startMoveCuttingFrame} onTouchMove={this.moveCuttingFrame} onTouchEnd={this.stopMoveCuttingFrame} />
               <View className='corner corner-bottom-right' id='corner-bottom-right' onTouchStart={this.startMoveCuttingFrame} onTouchMove={this.moveCuttingFrame} onTouchEnd={this.stopMoveCuttingFrame} />
             </View>
-            <View className='mask mask-right' />
+            <View className={'mask mask-right' + (this.state.movingCuttingFrame ? ' dark' : '')} />
           </View>
-          <View className='mask mask-bottom' />
+          <View className={'mask mask-bottom' + (this.state.movingCuttingFrame ? ' dark' : '')} />
         </View>
         <Image 
           className='img' 

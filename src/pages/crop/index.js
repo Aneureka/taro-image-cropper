@@ -18,7 +18,7 @@ export default class Crop extends Component {
   }
 
   handleReceiveImage = (imgSrc, imgWidth, imgHeight) => {
-    Taro.navigateTo({
+    Taro.redirectTo({
       url: `/pages/index/index?imgSrc=${imgSrc}&imgWidth=${imgWidth}&imgHeight=${imgHeight}`
     })
   }

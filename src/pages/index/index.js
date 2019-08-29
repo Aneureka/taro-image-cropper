@@ -34,7 +34,7 @@ export default class Index extends Component {
       sizeType: 'original',
       success: (res) => {
         const imgSrc = res.tempFilePaths[0]
-        Taro.navigateTo({
+        Taro.redirectTo({
           url: `/pages/crop/index?imgSrc=${imgSrc}`
         })
       }
