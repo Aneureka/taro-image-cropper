@@ -1,8 +1,17 @@
 .index {
-  width: 100%;
+  width: 100vw;
   height: 100vh;
   display: flex;
   flex-direction: column;
-  align-items: stretch;
-  background-color: yellow;
+  align-items: center;
+  background-color: yellowgreen;
+}
+
+.button {
+  margin-top: 5rem;
+  margin-bottom: 5rem;
+}
+
+.img {
+  width: 80%;
 }

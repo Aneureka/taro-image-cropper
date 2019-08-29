@@ -20,15 +20,13 @@ export default class ImageCropper extends Component {
       cutWidth: 0,
       cutHeight: 0,
     }
-    this.canvasId = 'image-cropper'
-    this.ctx = null
     this.systemInfo = Taro.getSystemInfoSync()
     this.windowWidth = this.systemInfo.windowWidth
     this.windowHeight = this.systemInfo.windowHeight
     this.applyThrottle = this.props.applyThrottleOnAndroid && this.systemInfo.platform === 'android'
-    this.canvasWidth = 0
-    this.canvasHeight = 0
-    this.canvasRatio = 0
+    this.cropperWidth = 0
+    this.cropperHeight = 0
+    this.cropperRatio = 0
     this.originalImageWidth = 0
     this.originalImageHeight = 0
     this.originalImageRatio = 0
@@ -40,13 +38,21 @@ export default class ImageCropper extends Component {
   }
 
   componentDidMount () {
-    this.initializeCanvas()
+    this.initializeCropperSize()
     this.initializeCuttingFrame()
     this.initializeImageInfo()
+    this.initializeCanvas()
     if (this.applyThrottle) {
       this.moveCuttingFrame = throttle(this.moveCuttingFrame)
       this.moveImage = throttle(this.moveImage)
     }
+    console.log(this.props)
+  }
+
+  initializeCropperSize = () => {
+    this.cropperWidth = this.windowWidth
+    this.cropperHeight = this.windowHeight
+    this.cropperRatio = this.cropperHeight / this.cropperWidth
   }
 
   initializeImageInfo = () => {
@@ -91,10 +97,10 @@ export default class ImageCropper extends Component {
   }
 
   initializeCuttingFrame = () => {
-    this.initialCuttingFrameWidth = Math.floor(this.canvasWidth * 2 / 3)
+    this.initialCuttingFrameWidth = Math.floor(this.cropperWidth * 2 / 3)
     this.initialCuttingFrameHeight = this.initialCuttingFrameWidth
-    this.initialCuttingFrameLeft = Math.floor((this.canvasWidth - this.initialCuttingFrameWidth) / 2)
-    this.initialCuttingFrameTop = Math.floor((this.canvasHeight - this.initialCuttingFrameHeight) / 2)
+    this.initialCuttingFrameLeft = Math.floor((this.cropperWidth - this.initialCuttingFrameWidth) / 2)
+    this.initialCuttingFrameTop = Math.floor((this.cropperHeight - this.initialCuttingFrameHeight) / 2)
     this.setState({
       cutLeft: this.initialCuttingFrameLeft,
       cutTop: this.initialCuttingFrameTop,
@@ -104,22 +110,9 @@ export default class ImageCropper extends Component {
   }
 
   initializeCanvas = () => {
+    this.canvasId = 'image-cropper'
     this.ctx = Taro.createCanvasContext(this.canvasId, this.$scope)
-    // calculate canvas size according to props [width, height]
-    const originalWidth = this.props.width
-    const originalHeight = this.props.height
-    if (originalWidth.search('vw') >= 0 && originalHeight.search('vh') >= 0) {
-      this.canvasWidth = Math.floor(parseInt(originalWidth, 10) * this.windowWidth / 100)
-      this.canvasHeight = Math.floor(parseInt(originalHeight, 10) * this.windowHeight / 100)
-    } else if (originalWidth.search('px') >= 0 && originalHeight.search('px') >= 0) {
-      this.canvasHeight = Math.floor(parseInt(originalHeight))
-      this.canvasWidth = Math.floor(parseInt(originalWidth))
-    } else {
-      // default
-      this.canvasWidth = this.windowWidth
-      this.canvasHeight = this.windowHeight
-    }
-    this.canvasRatio = this.canvasHeight / this.canvasWidth
+    this.cropImageOnCanvas(true)
   }
 
   startMoveCuttingFrame = (e) => {
@@ -143,6 +136,10 @@ export default class ImageCropper extends Component {
     const newCutTouchY = e.touches[0].clientY
     const targetId = e.target.id
     this._calcAndUpdateCuttingFrame(newCutTouchX, newCutTouchY, targetId)
+  }
+
+  stopMoveCuttingFrame = () => {
+    // this.cropImageOnCanvas(true)
   }
 
   startMoveImage = (e) => {
@@ -182,62 +179,50 @@ export default class ImageCropper extends Component {
       this.setState({
         imageWidth: Math.floor(scale * this.initialImageWidth),
         imageHeight: Math.floor(scale * this.initialImageHeight),
-        imageLeft: Math.floor((this.canvasWidth - Math.floor(scale * this.initialImageWidth)) / 2),
-        imageTop: Math.floor((this.canvasHeight - Math.floor(scale * this.initialImageHeight)) / 2),
+        imageLeft: Math.floor((this.cropperWidth - Math.floor(scale * this.initialImageWidth)) / 2),
+        imageTop: Math.floor((this.cropperHeight - Math.floor(scale * this.initialImageHeight)) / 2),
       })
     }
   }
 
   stopMoveImage = () => {
     this._rectifyImage()
+    // this.cropImageOnCanvas(true)
   }
-
-  // draw image according to current canvas state
-  draw = () => {
-    let ctx = this.ctx
-    ctx.save()
-    ctx.drawImage(this.imageSource, this.state.imageLeft, this.state.imageTop, this.state.imageWidth, this.state.imageHeight)
-    ctx.restore()
-    ctx.draw()
-  }
-
-  _rectifyImage = () => {
-    let newImageLeft = this.state.imageLeft
-    let newImageTop = this.state.imageTop
-    let newImageWidth = this.state.imageWidth
-    let newImageHeight = this.state.imageHeight
-    const curCutLeft = this.state.cutLeft
-    const curCutTop = this.state.cutTop
-    const curCutWidth = this.state.cutWidth
-    const curCutHeight = this.state.cutHeight
-    // update image size
-    let newTempScale = Math.max(curCutWidth / newImageWidth, curCutHeight / newImageHeight, 1)
-    newImageWidth = Math.floor(newImageWidth * newTempScale)
-    newImageHeight = Math.floor(newImageHeight * newTempScale)
-    this.scale = newImageWidth / this.initialImageWidth
-    // update image position
-    // left
-    if (newImageLeft > curCutLeft) {
-      newImageLeft = curCutLeft
-    }
-    // top
-    if (newImageTop > curCutTop) {
-      newImageTop = curCutTop
-    }
-    // right
-    if (newImageLeft + newImageWidth < curCutLeft + curCutWidth) {
-      newImageLeft = curCutLeft + curCutWidth - newImageWidth
-    }
-    // 
-    if (newImageTop + newImageHeight < curCutTop + curCutHeight) {
-      newImageTop = curCutTop + curCutHeight - newImageHeight
-    }
-    this.setState({
-      imageLeft: newImageLeft,
-      imageTop: newImageTop,
-      imageWidth: newImageWidth,
-      imageHeight: newImageHeight
-    })
+ 
+  cropImageOnCanvas = (onlyDraw=false) => { 
+    this.ctx.drawImage(this.state.imgSrc, this.state.imageLeft, this.state.imageTop, this.state.imageWidth, this.state.imageHeight)
+    this.ctx.draw(false, 
+      setTimeout(() => {
+        Taro.canvasToTempFilePath({
+          x: this.state.cutLeft,
+          y: this.state.cutTop,
+          width: this.state.cutWidth,
+          height: this.state.cutHeight,
+          destWidth: this.state.cutWidth * this.props.exportScale,
+          destHeight: this.state.cutHeight * this.props.exportScale,
+          canvasId: this.canvasId,
+          fileType: 'png',
+          quality: this.props.exportQuality,
+          success: (res) => {
+            if (onlyDraw !== true) {
+              this.props.onGetCroppedImage(
+                res.tempFilePath, 
+                this.state.cutWidth * this.props.exportScale,
+                this.state.cutHeight * this.props.exportScale
+              )
+            }
+          },
+          fail: (err) => {
+            console.error(err)
+            Taro.showToast({
+              title: this.props.saveFailedToastText,
+              icon: 'none',
+            })
+          }
+        }, this.$scope)
+      }
+    ), 1000)
   }
 
   _calcAndUpdateCuttingFrame = (newCutTouchX, newCutTouchY, cornerId) => {
@@ -273,7 +258,7 @@ export default class ImageCropper extends Component {
         break
       case 'corner-top-right':
         newCutTouchX = Math.max(this.startCutLeft + this.props.cuttingFrameMinSize, newCutTouchX)
-        newCutTouchX = Math.min(this.canvasWidth + this.startCutX - this.startCutLeft - this.startCutWidth, newCutTouchX)
+        newCutTouchX = Math.min(this.cropperWidth + this.startCutX - this.startCutLeft - this.startCutWidth, newCutTouchX)
         newCutTouchY = Math.max(this.startCutY - this.startCutTop, newCutTouchY)
         newCutTouchY = Math.min(this.startCutTop + this.startCutHeight - this.props.cuttingFrameMinSize, newCutTouchY)
         distX = newCutTouchX - this.startCutX
@@ -295,11 +280,11 @@ export default class ImageCropper extends Component {
         newCutTouchX = Math.max(this.startCutX - this.startCutLeft, newCutTouchX)
         newCutTouchX = Math.min(this.startCutLeft + this.startCutWidth - this.props.cuttingFrameMinSize, newCutTouchX)
         newCutTouchY = Math.max(this.startCutTop + this.props.cuttingFrameMinSize, newCutTouchY)
-        newCutTouchY = Math.min(this.canvasHeight + this.startCutY - this.startCutTop - this.startCutHeight, newCutTouchY)
+        newCutTouchY = Math.min(this.cropperHeight + this.startCutY - this.startCutTop - this.startCutHeight, newCutTouchY)
         distX = newCutTouchX - this.startCutX
         distY = newCutTouchY - this.startCutY
         if (this.props.fixCuttingFrameRatio) {
-          distX = Math.max(-this.canvasHeight + this.startCutTop + this.startCutHeight, distX)
+          distX = Math.max(-this.cropperHeight + this.startCutTop + this.startCutHeight, distX)
           distY = -distX
         }
         newCutLeft += distX
@@ -313,13 +298,13 @@ export default class ImageCropper extends Component {
         break
       case 'corner-bottom-right':
         newCutTouchX = Math.max(this.startCutLeft + this.props.cuttingFrameMinSize, newCutTouchX)
-        newCutTouchX = Math.min(this.canvasWidth + this.startCutX - this.startCutLeft - this.startCutWidth, newCutTouchX)
+        newCutTouchX = Math.min(this.cropperWidth + this.startCutX - this.startCutLeft - this.startCutWidth, newCutTouchX)
         newCutTouchY = Math.max(this.startCutTop + this.props.cuttingFrameMinSize, newCutTouchY)
-        newCutTouchY = Math.min(this.canvasHeight + this.startCutY - this.startCutTop - this.startCutHeight, newCutTouchY)
+        newCutTouchY = Math.min(this.cropperHeight + this.startCutY - this.startCutTop - this.startCutHeight, newCutTouchY)
         distX = newCutTouchX - this.startCutX
         distY = newCutTouchY - this.startCutY
         if (this.props.fixCuttingFrameRatio) {
-          distX = Math.min(this.canvasHeight - this.startCutTop - this.startCutHeight, distX)
+          distX = Math.min(this.cropperHeight - this.startCutTop - this.startCutHeight, distX)
           distY = distX
         }
         newCutWidth += distX
@@ -336,7 +321,6 @@ export default class ImageCropper extends Component {
   }
 
   _adjustImageWhileMovingCuttingFrame = (newCutLeft, newCutTop, newCutWidth, newCutHeight, cornerId) => {
-    console.log(cornerId)
     let newImageLeft = this.state.imageLeft
     let newImageTop = this.state.imageTop
     let newImageWidth = this.state.imageWidth
@@ -391,18 +375,57 @@ export default class ImageCropper extends Component {
     })
   }
 
+  _rectifyImage = () => {
+    let newImageLeft = this.state.imageLeft
+    let newImageTop = this.state.imageTop
+    let newImageWidth = this.state.imageWidth
+    let newImageHeight = this.state.imageHeight
+    const curCutLeft = this.state.cutLeft
+    const curCutTop = this.state.cutTop
+    const curCutWidth = this.state.cutWidth
+    const curCutHeight = this.state.cutHeight
+    // update image size
+    let newTempScale = Math.max(curCutWidth / newImageWidth, curCutHeight / newImageHeight, 1)
+    newImageWidth = Math.floor(newImageWidth * newTempScale)
+    newImageHeight = Math.floor(newImageHeight * newTempScale)
+    this.scale = newImageWidth / this.initialImageWidth
+    // update image position
+    // left
+    if (newImageLeft > curCutLeft) {
+      newImageLeft = curCutLeft
+    }
+    // top
+    if (newImageTop > curCutTop) {
+      newImageTop = curCutTop
+    }
+    // right
+    if (newImageLeft + newImageWidth < curCutLeft + curCutWidth) {
+      newImageLeft = curCutLeft + curCutWidth - newImageWidth
+    }
+    // 
+    if (newImageTop + newImageHeight < curCutTop + curCutHeight) {
+      newImageTop = curCutTop + curCutHeight - newImageHeight
+    }
+    this.setState({
+      imageLeft: newImageLeft,
+      imageTop: newImageTop,
+      imageWidth: newImageWidth,
+      imageHeight: newImageHeight
+    })
+  }
+
   render () {
     return (
-      <View className='index' style={'width: ' + this.props.width + '; height: ' + this.props.height + 'px; background: ' + this.props.background + ';'}>
+      <View className='index' style={'background: ' + this.props.background + ';'}>
         <View className='content'>
           <View className='mask mask-top' style={'height: ' + this.state.cutTop + 'px;'} />
           <View className='content-mid' style={'height: ' + this.state.cutHeight + 'px;'}>
             <View className='mask mask-left' style={'width: ' + this.state.cutLeft + 'px;'} />
             <View className='cutting-frame' style={'width: ' + this.state.cutWidth + 'px; height: ' + this.state.cutHeight + 'px;'}>
-              <View className='corner corner-top-left' id='corner-top-left' onTouchStart={this.startMoveCuttingFrame} onTouchMove={this.moveCuttingFrame} />
-              <View className='corner corner-top-right' id='corner-top-right' onTouchStart={this.startMoveCuttingFrame} onTouchMove={this.moveCuttingFrame} />
-              <View className='corner corner-bottom-left' id='corner-bottom-left' onTouchStart={this.startMoveCuttingFrame} onTouchMove={this.moveCuttingFrame} />
-              <View className='corner corner-bottom-right' id='corner-bottom-right' onTouchStart={this.startMoveCuttingFrame} onTouchMove={this.moveCuttingFrame} />
+              <View className='corner corner-top-left' id='corner-top-left' onTouchStart={this.startMoveCuttingFrame} onTouchMove={this.moveCuttingFrame} onTouchEnd={this.stopMoveCuttingFrame} />
+              <View className='corner corner-top-right' id='corner-top-right' onTouchStart={this.startMoveCuttingFrame} onTouchMove={this.moveCuttingFrame} onTouchEnd={this.stopMoveCuttingFrame} />
+              <View className='corner corner-bottom-left' id='corner-bottom-left' onTouchStart={this.startMoveCuttingFrame} onTouchMove={this.moveCuttingFrame} onTouchEnd={this.stopMoveCuttingFrame} />
+              <View className='corner corner-bottom-right' id='corner-bottom-right' onTouchStart={this.startMoveCuttingFrame} onTouchMove={this.moveCuttingFrame} onTouchEnd={this.stopMoveCuttingFrame} />
             </View>
             <View className='mask mask-right' />
           </View>
@@ -416,49 +439,49 @@ export default class ImageCropper extends Component {
           onTouchMove={this.moveImage}
           onTouchEnd={this.stopMoveImage}
         />
-        
-        {/* <Canvas 
-          canvasId={this.canvasId}
+        <Canvas 
+          canvasId='image-cropper'
           disableScroll 
-          className='image-cropper-canvas' 
-          onTouchStart={this.touchImage}
-          onTouchMove={this.moveImage}
-          onTouchEnd={this.dropImage}
+          className='image-cropper-canvas'
         >
-        </Canvas> */}
+        </Canvas>
+        <Button className='save-button' onClick={this.cropImageOnCanvas}>{this.props.saveButtonText}</Button>
       </View>
     )
   }
 }
   
 ImageCropper.defaultProps = {
-  width: '100vw',
-  height: '100vh',
   imageSource: '',
   imageWidth: 0,
   imageHeight: 0,
-  enableCuttingFrameMoveOut: false,
   fixCuttingFrame: false,
-  fixCuttingFrameRatio: true,
+  fixCuttingFrameRatio: false,
   minScale: 0.5,
   maxScale: 2,
   background: 'rgba(0, 0, 0, 0.8)',
-  cuttingFrameColor: 'white',
-  cuttingFrameBorderSize: 30,
-  cuttingFrameBorderColor: 'white',
   cuttingFrameMinSize: 100,
-  applyThrottleOnAndroid: true
+  applyThrottleOnAndroid: true,
+  exportScale: 3,
+  exportQuality: 0.7,
+  onGetCroppedImage: null,
+  saveFailedToastText: '获取裁剪图片失败',
+  saveButtonText: '确定',
 }
 
 ImageCropper.propTypes = {
-  width: PropTypes.string,
-  height: PropTypes.string,
   imageSource: PropTypes.string,
   imageWidth: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
   imageHeight: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
-  disableCuttingFrameMoveOut: PropTypes.bool,
+  fixCuttingFrame: PropTypes.bool,
   fixCuttingFrameRatio: PropTypes.bool,
   minScale: PropTypes.number,
   maxScale: PropTypes.number,
-  background: PropTypes.string
+  background: PropTypes.string,
+  cuttingFrameMinSize: PropTypes.number,
+  applyThrottleOnAndroid: PropTypes.bool,
+  exportScale: PropTypes.number,
+  onGetCroppedImage: PropTypes.func,
+  saveFailedToastText: PropTypes.string,
+  saveButtonText: PropTypes.string,
 }

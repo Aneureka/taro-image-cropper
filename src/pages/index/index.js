@@ -1,8 +1,6 @@
 import Taro, { Component } from '@tarojs/taro'
-import { View, Text } from '@tarojs/components'
+import { View, Image, Button } from '@tarojs/components'
 import './index.scss'
-
-import ImageCropper from '../../components/ImageCropper'
 
 export default class Index extends Component {
 
@@ -10,21 +8,44 @@ export default class Index extends Component {
     navigationBarTitleText: 'Taro 图片裁剪工具',
   }
 
-  componentWillMount () { }
+  constructor (props) {
+    super(props)
+    this.state = {
+      imageSource: '',
+    }
+  }
 
-  componentDidMount () { }
+  componentDidMount () {
+    const params = this.$router.params || {}
+    this.setState({
+      imageSource: params.imgSrc,
+    })
+  }
 
-  componentWillUnmount () { }
+  componentWillUnmount () {
+    this.setState({
+      imageSource: ''
+    })
+  }
 
-  componentDidShow () { }
-
-  componentDidHide () { }
+  uploadImage = () => {
+    Taro.chooseImage({
+      count: 1,
+      sizeType: 'original',
+      success: (res) => {
+        const imgSrc = res.tempFilePaths[0]
+        Taro.navigateTo({
+          url: `/pages/crop/index?imgSrc=${imgSrc}`
+        })
+      }
+    })
+  }
 
   render () {
     return (
       <View className='index'>
-        {/* <ImageCropper imageSource='https://tokindle.top/s2a/results/acaa73f3-9513-4b0c-923d-074580dda687.jpg' enableCuttingFrameMoveOut enableCuttingFrameRatioChange /> */}
-        <ImageCropper imageSource='https://tokindle.top/s2a/results/test.jpg' enableCuttingFrameMoveOut enableCuttingFrameRatioChange />
+        <Button className='button' onClick={this.uploadImage}>上传图片</Button>
+        <Image className='img' src={this.state.imageSource} mode='widthFix' />
       </View>
     )
   }
